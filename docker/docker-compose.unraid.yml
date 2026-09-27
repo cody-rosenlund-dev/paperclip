@@ -21,10 +21,12 @@
 # Portainer strips a bare "$" from env var values in its Environment UI --
 # escape any secret containing one (e.g. an Argon2 hash) as "$$".
 #
-# NOTE: this repo contains symlinks under .claude/skills/, which Portainer's
-# git-stack clone refuses for security reasons. Deploy this stack via
-# Portainer's "Web editor" build method (paste this file's contents) rather
-# than "Git repository" -- see docs/deploy/unraid.md.
+# This fork deliberately does not carry the two .claude/skills/* symlinks
+# upstream ships (see git history): Portainer's git-stack clone refuses to
+# clone any repository containing a symlink, anywhere in the tree, for
+# security reasons. Removing them is what makes Portainer's "Git repository"
+# build method + GitOps webhook work for this stack -- see
+# docs/deploy/unraid.md.
 services:
   paperclip:
     image: ghcr.io/paperclipai/paperclip:${PAPERCLIP_IMAGE_TAG:-latest}

@@ -4,17 +4,21 @@ summary: Deploy Paperclip on Unraid via Portainer, pulling the published upstrea
 ---
 
 Deploys the published `ghcr.io/paperclipai/paperclip` image (upstream's own
-CI build) via a Portainer stack pasted from `docker/docker-compose.unraid.yml`
-in this fork. This fork does not build the image itself — it only owns the
-compose file, the deploy workflow, and this doc.
+CI build) via a Portainer stack sourced directly from
+`docker/docker-compose.unraid.yml` in this fork, using Portainer's Git
+repository build method with GitOps updates so a push here redeploys the
+stack automatically. This fork does not build the image itself — it only
+owns the compose file, the deploy workflow, and this doc.
 
-Note: the stack is **pasted into Portainer's Web editor**, not sourced from
-Portainer's Git-repository build method. This repo contains symlinks under
-`.claude/skills/` (upstream's own files), and Portainer's git-stack clone
-refuses to clone any repository containing a symlink, anywhere in the tree,
-for security reasons. The compose file still lives in git here as the
-source of truth — just copy its contents into Portainer manually when it
-changes.
+Note: this fork deliberately removed the two `.claude/skills/*` symlinks
+upstream ships. Portainer's git-stack clone refuses to clone any repository
+containing a symlink, anywhere in the tree, for security reasons — those
+symlinks are unrelated to the running app (they're Claude Code's own
+project-skill discovery convenience for contributors), so dropping them
+from this fork only unblocks Portainer and costs nothing functionally.
+Syncing from upstream in the future may attempt to reintroduce them; if so,
+keep this fork's deletion (don't resolve the conflict by restoring them) or
+Portainer's clone breaks again.
 
 ## Prerequisites
 
@@ -43,9 +47,16 @@ Postgres data directory is unsafe.
 
 ## 2. Create the Portainer stack
 
-Stacks → Add stack → **Web editor** → paste the contents of
-`docker/docker-compose.unraid.yml`. Re-paste and update the stack whenever
-that file changes in git.
+Stacks → Add stack → **Git repository**:
+
+- Repository URL: this fork's HTTPS clone URL
+- Repository reference: `refs/heads/master`
+- Compose path: `docker/docker-compose.unraid.yml`
+- GitOps updates: **Enabled**, mechanism **Webhook**
+
+Deploy the stack once to confirm the clone succeeds (it will, now that the
+symlinks are gone) and Portainer generates the GitOps webhook URL — copy it
+for step 6.
 
 ## 3. Set environment variables
 
@@ -99,21 +110,23 @@ an account, then choose **Claim this instance** on the setup screen.
 
 ## 6. Redeploy on push
 
-`.github/workflows/deploy-unraid.yml` pokes the stack's Portainer webhook
-from the self-hosted runner whenever `docker/docker-compose.unraid.yml`
-changes on `master` (or on manual dispatch). Set it up once:
+`.github/workflows/deploy-unraid.yml` pokes the stack's GitOps webhook from
+the self-hosted runner whenever `docker/docker-compose.unraid.yml` changes
+on `master` (or on manual dispatch). Set it up once:
 
-1. In the Portainer stack, enable **Webhook** and copy the generated URL.
+1. In the Portainer stack (from step 2), copy the **GitOps webhook** URL —
+   this is the git-aware webhook (re-clones + redeploys), not the plain
+   per-stack "Webhook" toggle used by non-git stacks.
 2. Add it as the repo secret `PORTAINER_STACK_WEBHOOK_URL`
    (Settings → Secrets and variables → Actions).
 
-The webhook re-pulls the image (`pull_policy: always` in the compose file)
-and recreates the container — that covers picking up a new upstream
-`:latest` release, including via manual dispatch with no compose change.
-It does **not** re-fetch the compose file itself from git (the stack is
-pasted, not git-sourced — see the note at the top of this doc): if you
-edit `docker/docker-compose.unraid.yml`, re-paste it into Portainer's
-Web editor yourself before or instead of relying on the workflow.
+Hitting this webhook re-clones the repo, applies whatever's currently in
+`docker/docker-compose.unraid.yml` at `master`, and — thanks to
+`pull_policy: always` — re-pulls the image too. So both compose edits
+(port, env defaults, volumes) and picking up a new upstream `:latest`
+release go through the same push-to-redeploy pipeline; no manual re-paste
+step. `workflow_dispatch` (Actions tab → run workflow) covers the
+"just fetch whatever's new" case with no compose change.
 
 ## 7. Use your Claude Pro / ChatGPT Plus subscriptions instead of API keys
 
