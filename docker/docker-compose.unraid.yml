@@ -9,14 +9,29 @@
 #   PAPERCLIP_IMAGE_TAG   - defaults to "latest" (upstream's most recent
 #                           tagged release, published only on `v*` tags)
 #   PAPERCLIP_PUBLIC_URL  - defaults to the paperclip.rosenlund-fam.com
-#                           NPM/Cloudflare Tunnel hostname
-#   ANTHROPIC_API_KEY / OPENAI_API_KEY - enables claude_local / codex_local
+#                           NPM/Cloudflare Tunnel hostname (the browser-facing
+#                           URL -- NOT the LAN ip:3131 NPM forwards to)
+#   ANTHROPIC_API_KEY / OPENAI_API_KEY - only needed for API-key billing.
+#     To use an existing Claude Pro / ChatGPT Plus subscription instead
+#     (no per-token billing), leave these unset and run `claude login` /
+#     `codex login` in the container's Portainer console. The image sets
+#     HOME=/paperclip, so both CLIs write their credentials under the
+#     /paperclip appdata mount below and survive container recreation.
 #
 # Portainer strips a bare "$" from env var values in its Environment UI --
 # escape any secret containing one (e.g. an Argon2 hash) as "$$".
+#
+# NOTE: this repo contains symlinks under .claude/skills/, which Portainer's
+# git-stack clone refuses for security reasons. Deploy this stack via
+# Portainer's "Web editor" build method (paste this file's contents) rather
+# than "Git repository" -- see docs/deploy/unraid.md.
 services:
   paperclip:
     image: ghcr.io/paperclipai/paperclip:${PAPERCLIP_IMAGE_TAG:-latest}
+    # Without this, a webhook-triggered redeploy just recreates the
+    # container from whatever image is already cached locally -- it won't
+    # actually fetch a newer ":latest".
+    pull_policy: always
     container_name: paperclip
     restart: unless-stopped
     # See docker-compose.quickstart.yml for why this is set: tini is PID 1
@@ -24,7 +39,11 @@ services:
     # backstop if something leaks anyway.
     pids_limit: 2048
     ports:
-      - "3100:3100"
+      # Host 3131 -> container 3100. The container always listens on 3100
+      # internally (change via PORT or PAPERCLIP_LISTEN_PORT if you ever
+      # need to, but there's no reason to here -- only the host side needs
+      # to move to avoid a port collision).
+      - "3131:3100"
     environment:
       HOST: "0.0.0.0"
       PAPERCLIP_HOME: "/paperclip"
@@ -40,9 +59,12 @@ services:
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
     volumes:
-      # Absolute appdata path, not a relative bind mount: Portainer's git
-      # clone lives on Unraid's ephemeral /data tmpfs, wiped on reboot.
-      # This path is also what Unraid's Appdata Backup plugin snapshots --
-      # keep "paperclip" in its stop-list so the embedded Postgres data
-      # gets a clean shutdown before the backup copy runs.
+      # Absolute appdata path, not a relative bind mount: Portainer's clone
+      # (when git-sourced) lives on Unraid's ephemeral /data tmpfs, wiped on
+      # reboot. This path is also what Unraid's Appdata Backup plugin
+      # snapshots -- keep "paperclip" in its stop-list so the embedded
+      # Postgres data gets a clean shutdown before the backup copy runs.
+      # This is also where claude/codex subscription login credentials
+      # persist (HOME=/paperclip in the image -> /paperclip/.claude,
+      # /paperclip/.codex).
       - /mnt/user/appdata/paperclip:/paperclip
