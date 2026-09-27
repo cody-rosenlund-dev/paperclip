@@ -1,0 +1,48 @@
+# Unraid + Portainer: pulls the published upstream image, does not build
+# locally. See ../docs/deploy/unraid.md for the full setup walkthrough.
+#
+# Required (set in Portainer's stack Environment variables, not here):
+#   BETTER_AUTH_SECRET                    - openssl rand -hex 32
+#   PAPERCLIP_TOOL_ACTION_SIGNING_SECRET  - openssl rand -hex 32
+#
+# Optional:
+#   PAPERCLIP_IMAGE_TAG   - defaults to "latest" (upstream's most recent
+#                           tagged release, published only on `v*` tags)
+#   PAPERCLIP_PUBLIC_URL  - defaults to the paperclip.rosenlund-fam.com
+#                           NPM/Cloudflare Tunnel hostname
+#   ANTHROPIC_API_KEY / OPENAI_API_KEY - enables claude_local / codex_local
+#
+# Portainer strips a bare "$" from env var values in its Environment UI --
+# escape any secret containing one (e.g. an Argon2 hash) as "$$".
+services:
+  paperclip:
+    image: ghcr.io/paperclipai/paperclip:${PAPERCLIP_IMAGE_TAG:-latest}
+    container_name: paperclip
+    restart: unless-stopped
+    # See docker-compose.quickstart.yml for why this is set: tini is PID 1
+    # inside the image and reaps orphaned agent descendants; this is the
+    # backstop if something leaks anyway.
+    pids_limit: 2048
+    ports:
+      - "3100:3100"
+    environment:
+      HOST: "0.0.0.0"
+      PAPERCLIP_HOME: "/paperclip"
+
+      PAPERCLIP_DEPLOYMENT_MODE: "authenticated"
+      PAPERCLIP_DEPLOYMENT_EXPOSURE: "private"
+      PAPERCLIP_PUBLIC_URL: "${PAPERCLIP_PUBLIC_URL:-https://paperclip.rosenlund-fam.com}"
+      PAPERCLIP_ALLOWED_HOSTNAMES: "${PAPERCLIP_ALLOWED_HOSTNAMES:-}"
+
+      BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}"
+      PAPERCLIP_TOOL_ACTION_SIGNING_SECRET: "${PAPERCLIP_TOOL_ACTION_SIGNING_SECRET:?PAPERCLIP_TOOL_ACTION_SIGNING_SECRET must be set}"
+
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+    volumes:
+      # Absolute appdata path, not a relative bind mount: Portainer's git
+      # clone lives on Unraid's ephemeral /data tmpfs, wiped on reboot.
+      # This path is also what Unraid's Appdata Backup plugin snapshots --
+      # keep "paperclip" in its stop-list so the embedded Postgres data
+      # gets a clean shutdown before the backup copy runs.
+      - /mnt/user/appdata/paperclip:/paperclip

@@ -1,0 +1,28 @@
+# Redeploys the `paperclip` Portainer stack on Unraid. Runs ONLY on a
+# self-hosted runner registered to this repo, reachable on the LAN so it
+# can hit Portainer's webhook directly -- GitHub-hosted runners cannot
+# reach the Unraid box. See docs/deploy/unraid.md.
+#
+# Required repo secret:
+#   PORTAINER_STACK_WEBHOOK_URL -- Portainer -> Stacks -> paperclip ->
+#   Webhook (enable it, copy the generated URL)
+name: Deploy paperclip (Unraid)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - docker/docker-compose.unraid.yml
+  workflow_dispatch: {}
+
+jobs:
+  redeploy:
+    runs-on: self-hosted
+    steps:
+      - name: Trigger Portainer stack redeploy
+        run: |
+          if [ -z "${{ secrets.PORTAINER_STACK_WEBHOOK_URL }}" ]; then
+            echo "::error::Set repo secret PORTAINER_STACK_WEBHOOK_URL (Portainer -> Stacks -> paperclip -> Webhook)."
+            exit 1
+          fi
+          curl -fsS -X POST "${{ secrets.PORTAINER_STACK_WEBHOOK_URL }}"
