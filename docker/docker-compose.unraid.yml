@@ -76,4 +76,4 @@ services:
       # one wins. Must be owned by uid/gid 1000 (or anything, since
       # docker-entrypoint.sh chowns the whole $PAPERCLIP_HOME tree,
       # this included, to the node user before dropping privileges).
-      - /mnt/user/appdata/claude-configs/cody-rosenlund-dev:/paperclip/.claude
+      - /mnt/user/appdata/claude-configs/cody-rosenlund-dev:/paperclip/instances/default/ai-local-logins/fd8b1021-ab35-4221-9279-67193d54cfac/
